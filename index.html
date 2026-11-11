@@ -22,8 +22,9 @@
 <meta name="twitter:image" content="https://atleqbom.vercel.app/og-image.png">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#16224a">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-512.png">
 <style>
 :root{
   --ink:#f6f2ff;
@@ -191,6 +192,33 @@ canvas{width:100%;height:100%;display:block;border-radius:14px;touch-action:none
 @media (prefers-reduced-motion:reduce){
   .logoWrap img,.logoWrap::after{animation:none}
 }
+
+/* ---------- نافذة الخسارة ---------- */
+.lose{
+  position:absolute;inset:0;border-radius:14px;z-index:5;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(8,14,36,.55);
+}
+.lose[hidden]{display:none}
+.lose .card{
+  width:min(84%,340px);background:#fff;color:#16305a;text-align:center;
+  border-radius:24px;padding:28px 24px 30px;
+  box-shadow:0 18px 50px rgba(0,0,0,.4);
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+  animation:loseIn .35s cubic-bezier(.2,.9,.3,1.2);
+}
+.lose h2{margin:0;font-size:clamp(28px,8vw,36px);font-weight:800}
+.lose p{margin:0;font-size:clamp(16px,4.5vw,19px);line-height:1.7;color:#35557f}
+.lose .pts{font-weight:700;color:#16305a}
+.lose .pts b{color:#e08a00;font-size:1.25em;font-variant-numeric:tabular-nums}
+.play.retry{
+  margin-top:10px;font-size:22px;padding:12px 30px;
+  display:inline-flex;align-items:center;justify-content:center;gap:10px;
+}
+.play.retry svg{width:26px;height:26px;flex:none}
+.lose .play:focus-visible{outline:3px solid #1b78c9;outline-offset:3px}
+@keyframes loseIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){ .lose .card{animation:none} }
 </style>
 </head>
 <body>
@@ -213,6 +241,17 @@ canvas{width:100%;height:100%;display:block;border-radius:14px;touch-action:none
     <div class="card">
       <h2><span>👍</span>أحسنت<span>😊</span></h2>
       <div class="wbar" aria-hidden="true"><i id="winFill"></i></div>
+    </div>
+  </div>
+  <div class="lose" id="lose" hidden role="alertdialog" aria-labelledby="loseT">
+    <div class="card">
+      <h2 id="loseT">محاولة جيدة</h2>
+      <p>للأسف وصلت البالونات إلى الخط</p>
+      <p class="pts">النقاط: <b id="loseS">0</b></p>
+      <button class="play retry" id="loseB">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v5h5"/></svg>
+        حاول مرة أخرى
+      </button>
     </div>
   </div>
   <canvas class="conf" id="conf" aria-hidden="true"></canvas>
@@ -286,6 +325,7 @@ cv.width = W * dpr; cv.height = H * dpr;
 
 const $ = id => document.getElementById(id);
 const ov = $('ov'), ovT = $('ovT'), ovP = $('ovP'), ovB = $('ovB');
+const lose = $('lose'), loseB = $('loseB'), loseS = $('loseS');
 
 /* ---------- الشبكة السداسية ---------- */
 const off  = r => (r + parity) & 1;
@@ -480,7 +520,8 @@ function levelWon() {
 function gameOver() {
   saveBest(); hud();
   state = 'over';
-  showOv('انتهت اللعبة', `وصلت البالونات إلى الخط في المستوى ${level}.\nالنقاط: ${score}`, 'أعد المستوى', () => { score = levelStartScore; startLevel(level); });
+  loseS.textContent = score;
+  lose.hidden = false; loseB.focus();
   sndLose();
 }
 let ovAction = newGame;
@@ -529,7 +570,8 @@ function showWin(next) {
   winTimer = setTimeout(next, 3000);
 }
 function hideWin() { clearTimeout(winTimer); confTimers.forEach(clearTimeout); confTimers = []; confetti = []; $('win').hidden = true; }
-function hideOv() { ov.hidden = true; hideWin(); }
+function hideOv() { ov.hidden = true; lose.hidden = true; hideWin(); }
+loseB.addEventListener('click', () => { score = levelStartScore; startLevel(level); });   // إعادة المستوى بنقاط بدايته
 ovB.addEventListener('click', () => ovAction());
 
 const BIG_GROUP = 8;   // المجموعة الأكبر من هذا العدد تُضاعف نقاطها
@@ -577,7 +619,7 @@ cv.addEventListener('pointermove', e => { if (state === 'ready') setAim(pos(e));
 cv.addEventListener('pointerup', () => { if (armed) shoot(); armed = false; });
 
 window.addEventListener('keydown', e => {
-  if (!ov.hidden || state === 'menu') return;
+  if (!ov.hidden || !lose.hidden || state === 'menu') return;
   if (e.key === 'ArrowLeft')  ang = Math.min(Math.PI - .14, ang + .05);
   else if (e.key === 'ArrowRight') ang = Math.max(.14, ang - .05);
   else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); shoot(); }
