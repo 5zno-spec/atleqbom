@@ -1,4 +1,4 @@
-const CACHE = 'forqaat-v34';
+const CACHE = 'forqaat-v35';
 // الملفات التي تحتاجها اللعبة فقط (صورة المعاينة og-image وأيقونات ٥١٢ لا تُحمَّل مسبقًا لتوفير الباقة)
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './logo.png'];
 
