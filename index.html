@@ -375,7 +375,7 @@ function startLevel(lv) {
   cur = rndColor(); nxt = rndColor();
   state = 'ready';
   toast = { t: 160, text: `المستوى ${lv}` };
-  hideOv(); hud();
+  hideOv(); hud(); startLoop();
 }
 function newGame() { score = 0; startLevel(1); }
 
@@ -744,6 +744,10 @@ function sndPop(delay = 0) { sndBubble(delay, 400 + Math.random() * 120); }
 const sndWin  = () => { sndBubble(0, 400); sndBubble(.11, 500); sndBubble(.22, 620); tune([523, 659, 784, 1047], .11, .22, 'triangle', .07, .4); };  // فرقعات ثم دو مي صول دو
 const sndTrophy = () => tune([523, 659, 784, 1047, 784, 1047, 1319], .13, .26);     // ختام اللعبة
 const sndLose = () => tune([392, 370, 330, 262], .17, .3, 'triangle', .08);         // نغمات هابطة
+document.addEventListener('visibilitychange', () => {        // إيقاف الصوت عند الخروج من التطبيق
+  if (!ac) return;
+  try { if (document.hidden) ac.suspend(); else if (!muted) ac.resume(); } catch (e) {}
+});
 const sndClick = () => snd(900, .05, 'sine', .06);                                  // نقرة الأزرار
 document.addEventListener('click', e => { if (e.target.closest('button')) sndClick(); });
 
@@ -784,14 +788,23 @@ function skyGrad() {
 }
 skyGrad();
 
+/* صور البالونات تُرسم مرة واحدة عند البدء ثم تُنسخ في كل إطار (توفير للمعالج والبطارية) */
+const SPR_D = R * 2 + 2;
+const SPR = PAL.map(([c0, c1]) => {
+  const n = Math.ceil(SPR_D * dpr), s = document.createElement('canvas');
+  s.width = s.height = n;
+  const g = s.getContext('2d'), x = n / 2, y = n / 2, r = (R - 1) * dpr;
+  const gr = g.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  gr.addColorStop(0, c0); gr.addColorStop(1, c1);
+  g.fillStyle = gr;
+  g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.55)';
+  g.beginPath(); g.ellipse(x - r * .38, y - r * .42, r * .2, r * .12, -.7, 0, 6.283); g.fill();
+  return s;
+});
 function balloon(x, y, ci, s = 1) {
-  const r = (R - 1) * s;
-  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
-  g.addColorStop(0, PAL[ci][0]); g.addColorStop(1, PAL[ci][1]);
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.55)';
-  ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .2, r * .12, -.7, 0, 6.283); ctx.fill();
+  const d = SPR_D * s;
+  ctx.drawImage(SPR[ci], x - d / 2, y - d / 2, d, d);
 }
 
 function trace() {
@@ -807,7 +820,11 @@ function trace() {
   return pts;
 }
 
+/* حلقة الرسم تتوقف في القائمة الرئيسية وتعود عند بدء اللعب */
+let looping = false;
+function startLoop() { if (!looping) { looping = true; requestAnimationFrame(frame); } }
 function frame() {
+  if (state === 'menu') { looping = false; return; }
   // تحديث
   if (state === 'flying' && proj) {
     for (let i = 0; i < 4 && proj; i++) {
@@ -907,7 +924,7 @@ grid = Array.from({ length: MAXR }, (_, r) => new Array(cols(r)).fill(-1));
 cur = 0; nxt = 0;
 hud();
 ovAction = newGame;
-requestAnimationFrame(frame);
+startLoop();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
