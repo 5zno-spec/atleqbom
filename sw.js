@@ -1,4 +1,4 @@
-const CACHE = 'forqaat-v23';
+const CACHE = 'forqaat-v28';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './og-image.png', './logo.png'];
 
 self.addEventListener('install', e => {

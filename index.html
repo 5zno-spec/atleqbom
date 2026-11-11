@@ -211,7 +211,7 @@ canvas{width:100%;height:100%;display:block;border-radius:14px;touch-action:none
   </div>
   <div class="win" id="win" hidden role="status" aria-live="polite">
     <div class="card">
-      <h2><span>👍</span>أحسنت<span>😂</span></h2>
+      <h2><span>👍</span>أحسنت<span>😊</span></h2>
       <div class="wbar" aria-hidden="true"><i id="winFill"></i></div>
     </div>
   </div>
@@ -265,7 +265,7 @@ let grid, parity, score, level, shots, levelColors;
 let cur, nxt, proj = null, ang = Math.PI / 2;
 let toast = { t: 0, text: '' };
 let state = 'menu';            // menu | ready | flying | won | over
-let parts = [], falls = [], emojis = [];
+let parts = [], falls = [], emojis = [], combo = 0;
 const FACES = ['😃', '😊', '😄', '😂', '👍'];   // فرحان، سعيد، يضحك، لايك
 let best = 0, muted = false, levelStartScore = 0;
 const KEY_L = 'balloon_level', KEY_S = 'balloon_score';
@@ -325,7 +325,7 @@ function pickColor(r, c, pool) {
 function startLevel(lv) {
   level = lv; parity = 0; shots = 0; proj = null;
   levelStartScore = score; saveProgress();
-  parts = []; falls = []; emojis = [];
+  parts = []; falls = []; emojis = []; combo = 0;
   levelColors = diff.colors(lv);
   const rows = diff.rows(lv);
   const pool = Array.from({ length: levelColors }, (_, i) => i);
@@ -404,7 +404,7 @@ function resolve(r, c) {
       t: 0, life: 62 + i * 6, e: FACES[Math.random() * FACES.length | 0]
     });
   }
-  snd(480 + group.length * 45, .13);
+  sndPops(group.length); combo++;
 
   // البالونات التي فقدت اتصالها بالسقف تسقط
   const hang = new Set(), q = [];
@@ -423,7 +423,9 @@ function resolve(r, c) {
     }
   }
   score += dropped * 30;
-  if (dropped) snd(300, .25, 'sine');
+  const popT = Math.min(group.length, 12) * (group.length > 8 ? .06 : .085) + .1;
+  if (dropped) sndDrops(dropped, popT);
+  if (combo >= 2) sndCombo(combo, popT + (dropped ? Math.min(dropped, 8) * .06 + .12 : 0));
   return true;
 }
 
@@ -445,7 +447,7 @@ function land() {
   const [r, c] = cell;
   grid[r][c] = color;
   if (!resolve(r, c)) {
-    snd(220, .07, 'sine', .06);
+    combo = 0; sweep(260, 110, .13, 'sine', .14);
     if (++shots >= dropEvery()) { shots = 0; pushRow(); }
   }
   if (!present().length) return levelWon();
@@ -589,7 +591,7 @@ function shoot() {
   if (state !== 'ready') return;
   proj = { x: SX, y: SY, vx: Math.cos(ang) * SPEED, vy: -Math.sin(ang) * SPEED, c: cur };
   state = 'flying';
-  snd(380, .08, 'triangle', .05);
+  sweep(300, 950, .12, 'triangle', .07);
 }
 
 /* ---------- الواجهة الرئيسية ---------- */
@@ -631,18 +633,31 @@ $('mute').addEventListener('click', e => {
 });
 
 /* ---------- الصوت ---------- */
-let ac;
+let ac, master;
+/* مخرج الصوت: تضخيم عام + ضاغط يمنع التشويه، ويستأنف السياق إن أوقفه المتصفح */
+function audio() {
+  if (!ac) {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 8;
+    comp.attack.value = .003; comp.release.value = .2;
+    master = ac.createGain(); master.gain.value = 3.5;
+    master.connect(comp); comp.connect(ac.destination);
+  }
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
 function snd(f, d = .09, type = 'triangle', v = .08) {
   if (muted) return;
   try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    audio();
     const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
     o.type = type;
     o.frequency.setValueAtTime(f, t);
     o.frequency.exponentialRampToValueAtTime(f * .4, t + d);
     g.gain.setValueAtTime(v, t);
     g.gain.exponentialRampToValueAtTime(.001, t + d);
-    o.connect(g); g.connect(ac.destination);
+    o.connect(g); g.connect(master);
     o.start(t); o.stop(t + d);
   } catch (e) {}
 }
@@ -651,7 +666,7 @@ function snd(f, d = .09, type = 'triangle', v = .08) {
 function tune(freqs, step = .11, d = .2, type = 'triangle', v = .07, delay = 0) {
   if (muted) return;
   try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    audio();
     const t0 = ac.currentTime + .02 + delay;
     freqs.forEach((f, i) => {
       const t = t0 + i * step, o = ac.createOscillator(), g = ac.createGain();
@@ -659,29 +674,62 @@ function tune(freqs, step = .11, d = .2, type = 'triangle', v = .07, delay = 0) 
       g.gain.setValueAtTime(.0001, t);
       g.gain.exponentialRampToValueAtTime(v, t + .015);
       g.gain.exponentialRampToValueAtTime(.001, t + d);
-      o.connect(g); g.connect(ac.destination);
+      o.connect(g); g.connect(master);
       o.start(t); o.stop(t + d + .02);
     });
   } catch (e) {}
 }
-/* فرقعة: دفعة ضجيج قصيرة */
-function sndPop(delay = 0) {
+/* «بوق» فقاعة: نغمة مستديرة تنزلق للأعلى بسرعة ثم تخفت (بلا نقرة حادة) */
+function sndBubble(delay = 0, f = 480) {
   if (muted) return;
   try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    const len = Math.floor(ac.sampleRate * .12), b = ac.createBuffer(1, len, ac.sampleRate), d = b.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
-    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
-    s.buffer = b; f.type = 'bandpass'; f.frequency.value = 1800; g.gain.value = .5;
-    s.connect(f); f.connect(g); g.connect(ac.destination);
-    s.start(ac.currentTime + delay);
+    audio();
+    const t = ac.currentTime + .005 + delay, d = .16;
+    [[1, .34], [2, .07]].forEach(([mul, vol]) => {                       // أساسية + توافقية خفيفة لجسم الصوت
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f * .72 * mul, t);
+      o.frequency.exponentialRampToValueAtTime(f * 1.45 * mul, t + .085);
+      g.gain.setValueAtTime(.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + .012);
+      g.gain.exponentialRampToValueAtTime(.001, t + d);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + d + .02);
+    });
   } catch (e) {}
 }
-const sndWin  = () => { sndPop(0); sndPop(.1); sndPop(.21); tune([523, 659, 784, 1047], .11, .22, 'triangle', .07, .32); };  // فرقعات ثم دو مي صول دو
+function sndPop(delay = 0) { sndBubble(delay, 400 + Math.random() * 120); }
+const sndWin  = () => { sndBubble(0, 400); sndBubble(.11, 500); sndBubble(.22, 620); tune([523, 659, 784, 1047], .11, .22, 'triangle', .07, .4); };  // فرقعات ثم دو مي صول دو
 const sndTrophy = () => tune([523, 659, 784, 1047, 784, 1047, 1319], .13, .26);     // ختام اللعبة
 const sndLose = () => tune([392, 370, 330, 262], .17, .3, 'triangle', .08);         // نغمات هابطة
 const sndClick = () => snd(900, .05, 'sine', .06);                                  // نقرة الأزرار
 document.addEventListener('click', e => { if (e.target.closest('button')) sndClick(); });
+
+/* ---------- أصوات تفاعلية: تتغير حسب ما يحدث في اللعب ---------- */
+function sweep(f0, f1, d = .12, type = 'sine', v = .08, delay = 0) {     // نغمة تنزلق من تردد لآخر
+  if (muted) return;
+  try {
+    audio();
+    const t = ac.currentTime + .005 + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + d);
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + d + .02);
+  } catch (e) {}
+}
+const SCALE = [0, 2, 4, 7, 9];                                            // سلّم خماسي: كل فرقعة نغمة أعلى
+function sndPops(n) {                                                      // فرقعة لكل بالونة بنغمة صاعدة
+  const m = Math.min(n, 12), step = n > 8 ? .06 : .085;                    // بوق، بوق، بوق...
+  for (let i = 0; i < m; i++) {
+    const f = 330 * Math.pow(2, (SCALE[i % 5] + 12 * ((i / 5) | 0)) / 12);
+    sndBubble(i * step, Math.min(f, 1500));
+  }
+}
+function sndDrops(n, delay) {                                              // البالونات الساقطة: قطرات هابطة
+  for (let i = 0; i < Math.min(n, 8); i++) sweep(1000 - i * 50, 420 - i * 20, .16, 'sine', .09, delay + i * .06);
+}
+function sndCombo(c, delay) {                                              // تتابع الإصابات: جرس يعلو مع كل إصابة
+  const base = 659 * Math.pow(2, (Math.min(c, 9) - 2) * 2 / 12);
+  tune([base, base * 1.25, base * 1.5], .07, .18, 'sine', .08, delay);
+}
 
 /* ---------- الرسم ---------- */
 let sky;
@@ -721,8 +769,8 @@ function frame() {
   if (state === 'flying' && proj) {
     for (let i = 0; i < 4 && proj; i++) {
       proj.x += proj.vx / 4; proj.y += proj.vy / 4;
-      if (proj.x < R) { proj.x = R; proj.vx = -proj.vx; }
-      else if (proj.x > W - R) { proj.x = W - R; proj.vx = -proj.vx; }
+      if (proj.x < R) { proj.x = R; proj.vx = -proj.vx; sweep(750, 520, .05, 'sine', .09); }
+      else if (proj.x > W - R) { proj.x = W - R; proj.vx = -proj.vx; sweep(750, 520, .05, 'sine', .09); }
       if (collide(proj.x, proj.y)) { land(); break; }
     }
   }
