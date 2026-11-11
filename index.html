@@ -198,7 +198,7 @@ canvas{width:100%;height:100%;display:block;border-radius:14px;touch-action:none
 <div class="hud">
   <div class="stat sc"><span class="lbl">النقاط</span><b id="hScore">0</b><i class="bar"><u id="bScore"></u></i></div>
   <div class="stat lv"><span class="lbl">المستوى</span><b id="hLevel">1/50</b><i class="bar"><u id="bLevel"></u></i></div>
-  <div class="stat bs"><span class="lbl">أفضل نتيجة</span><b id="hBest">0</b><i class="bar"><u id="bBest"></u></i></div>
+  <div class="stat bs"><span class="lbl">الأفضل</span><b id="hBest">0</b><i class="bar"><u id="bBest"></u></i></div>
   <button id="mute" aria-label="كتم الصوت" title="الصوت">🔊</button>
 </div>
 
@@ -390,7 +390,7 @@ function resolve(r, c) {
     burst(px(rr, cc), py(rr), col);
     grid[rr][cc] = -1;
   }
-  score += group.length * 10 + (group.length - 3) * 5;
+  score += group.length * (group.length > BIG_GROUP ? 2 : 1);   // نقطة لكل بالونة، والمجموعة الكبيرة ×2
   // إيموجي يطفو من مكان الفرقعة (أكثر كلما كبرت المجموعة)
   let cx = 0, cy = 0;
   for (const [rr, cc] of group) { cx += px(rr, cc); cy += py(rr); }
@@ -422,7 +422,7 @@ function resolve(r, c) {
       grid[rr][cc] = -1; dropped++;
     }
   }
-  score += dropped * 30;
+  score += dropped;                              // نقطة واحدة لكل بالونة تسقط
   const popT = Math.min(group.length, 12) * (group.length > 8 ? .06 : .085) + .1;
   if (dropped) sndDrops(dropped, popT);
   if (combo >= 2) sndCombo(combo, popT + (dropped ? Math.min(dropped, 8) * .06 + .12 : 0));
@@ -466,7 +466,7 @@ function saveBest() {
   if (score > best) { best = score; try { localStorage.setItem('balloon_best', best); } catch (e) {} }
 }
 function levelWon() {
-  score += 100 * level; saveBest(); hud();
+  saveBest(); hud();                              // بلا مكافأة مستوى حتى لا تتضخم النتائج
   if (level >= MAX_LEVEL) {
     state = 'over'; clearProgress();
     showOv('ختمت اللعبة 🏆', `أنهيت جميع المستويات الخمسين.\nالنقاط: ${score}`, 'ابدأ من جديد', newGame);
@@ -532,7 +532,8 @@ function hideWin() { clearTimeout(winTimer); confTimers.forEach(clearTimeout); c
 function hideOv() { ov.hidden = true; hideWin(); }
 ovB.addEventListener('click', () => ovAction());
 
-const MILES = [1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+const BIG_GROUP = 8;   // المجموعة الأكبر من هذا العدد تُضاعف نقاطها
+const MILES = [50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
 const nextMile = v => MILES.find(m => v <= m) || v || 1;
 function setBar(id, f) { $(id).style.width = Math.round(Math.min(1, Math.max(0, f)) * 100) + '%'; }
 /* اختصار الأرقام: حتى ٩٩٩ كما هي، ثم 1k و1.1k و1.2k ... ثم 1M */
