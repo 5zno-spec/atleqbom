@@ -1,6 +1,6 @@
-const CACHE = 'forqaat-v35';
+const CACHE = 'forqaat-v36';
 // الملفات التي تحتاجها اللعبة فقط (صورة المعاينة og-image وأيقونات ٥١٢ لا تُحمَّل مسبقًا لتوفير الباقة)
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './logo.png'];
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './logo.png', './dev-logo.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

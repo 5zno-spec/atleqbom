@@ -131,11 +131,22 @@ canvas{width:100%;height:100%;display:block;border-radius:14px;touch-action:none
 .splash .bar i{
   display:block;height:100%;width:100%;border-radius:inherit;background:#1b78c9;
   transform-origin:right center;            /* يبدأ من اليمين */
-  animation:barFill 5s linear forwards;
+  animation:barFill 3s linear forwards;
 }
 @keyframes logoSway{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
 @keyframes barFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@media (prefers-reduced-motion:reduce){ .splash img{animation:none} }
+/* شعار الشركة المبرمجة: صغير في أسفل منتصف شاشة الشعار (يتغلب على قاعدة .splash img) */
+.splash .sp-dev{
+  position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));
+  height:56px;width:auto;transform:translateX(-50%);transform-origin:50% 50%;
+  opacity:0;animation:devIn .6s ease-out .5s forwards;
+}
+@keyframes devIn{to{opacity:1}}
+@media (max-height:520px){
+  .splash{padding-bottom:calc(54px + env(safe-area-inset-bottom))}
+  .splash .sp-dev{height:42px;bottom:calc(12px + env(safe-area-inset-bottom))}
+}
+@media (prefers-reduced-motion:reduce){ .splash img{animation:none} .splash .sp-dev{animation:none;opacity:1} }
 
 /* ---------- الواجهة الرئيسية ---------- */
 .menu{
@@ -1000,13 +1011,15 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 <div class="splash" id="splash" role="status" aria-label="جارٍ تحميل أطلق بوم">
   <img src="logo.png" alt="شعار أطلق بوم" width="512" height="512">
   <div class="bar" aria-hidden="true"><i id="splashBar"></i></div>
+  <img class="sp-dev" src="dev-logo.png" width="40" height="56" alt="وقار">
 </div>
 <script>
 (function(){
+  /* تختفي الشاشة حين يمتلئ الشريط (٣ ثوانٍ)، ومهلة احتياطية ٣٫٤ ثانية إن لم يصل حدث نهاية الحركة */
   var s=document.getElementById('splash'),b=document.getElementById('splashBar'),gone=false;
   function hide(){ if(gone)return; gone=true; s.classList.add('done'); setTimeout(function(){s.remove()},600); }
   b.addEventListener('animationend',hide);
-  setTimeout(hide,5400);
+  setTimeout(hide,3400);
 })();
 </script>
 </body>
